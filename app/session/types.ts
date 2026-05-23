@@ -32,12 +32,22 @@ export type Song = {
     tracks: TrackEntry[];
 };
 
+export type SongMatchParticipant = {
+    profile: Profile;
+    librarySongKeys: string[];
+};
+
+export type SongMatchingSession = {
+    participants: SongMatchParticipant[];
+};
+
 export type Session = {
     id: string;
     name: string;
     createdAt?: string;
     people?: Profile[];
     songs?: Song[];
+    songMatching?: SongMatchingSession;
 };
 
 export const STORAGE_KEY = "wantosing:sessions";

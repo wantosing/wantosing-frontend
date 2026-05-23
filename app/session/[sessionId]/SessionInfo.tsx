@@ -4,41 +4,9 @@ import React from "react";
 import Image from 'next/image';
 import type { Song } from "../types";
 import type { Profile } from '../../profile/types';
+import { simulatedAccounts } from '../simulatedAccounts';
 
-function SpotifyIcon({ size = 14 }: { size?: number }) {
-    return (
-        <svg width={size} height={size} viewBox="0 0 168 168" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden>
-            <circle cx="84" cy="84" r="84" fill="#1ED760" />
-            <path d="M122.1 118.2c-1.6 2.6-4.9 3.5-7.6 1.9-20.8-12.9-47-15.9-77.6-8.9-3 0.7-6-1.1-6.6-4.1s1.1-6 4.1-6.6c33.8-7.9 63.7-4.2 87.8 10.1 2.6 1.6 3.5 4.9 1.9 7.6z" fill="#fff" />
-        </svg>
-    );
-}
-
-function AppleIcon({ size = 14 }: { size?: number }) {
-    return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden>
-            <rect width="24" height="24" rx="4" fill="#FA2" />
-            <path d="M12 7c.8-1 1.8-2 3-2s2 1 2 2c0 1-1 2-2 2s-2-.5-3-2zM8 13c0-2 1-4 3-4s3 2 3 4-1 4-3 4-3-2-3-4z" fill="#fff" />
-        </svg>
-    );
-}
-
-function YouTubeIcon({ size = 14 }: { size?: number }) {
-    return (
-        <svg width={size} height={size} viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-hidden>
-            <rect width="24" height="24" rx="4" fill="#FF0000" />
-            <path d="M9 8l6 4-6 4V8z" fill="#fff" />
-        </svg>
-    );
-}
-
-function ConnectedIcon({ service, size = 14 }: { service?: string; size?: number }) {
-    if (!service) return null;
-    if (service === 'spotify') return <SpotifyIcon size={size} />;
-    if (service === 'appleMusic' || service === 'apple') return <AppleIcon size={size} />;
-    if (service === 'youtube') return <YouTubeIcon size={size} />;
-    return null;
-}
+// Removed unused social icon helpers after menu refactor
 
 type Props = {
     session: { id: string; name: string };
@@ -50,7 +18,6 @@ type Props = {
     people: Profile[];
     setShowPeople: (b: boolean) => void;
     formattedCreated: string;
-    totalTime: string;
     onBack: () => void;
     onDeleteRequest: () => void;
 };
@@ -65,11 +32,11 @@ export default function SessionInfo({
     people,
     setShowPeople,
     formattedCreated,
-    totalTime,
     onBack,
     onDeleteRequest,
 }: Props) {
     const STORAGE_KEY = "wantosing:sessions";
+    const [showAddPersonMenu, setShowAddPersonMenu] = React.useState(false);
 
     type SessionLocal = { id: string; name: string; createdAt?: string; people?: Profile[]; songs?: Song[] };
 
@@ -102,10 +69,40 @@ export default function SessionInfo({
     }
 
     function addPerson() {
+        setShowAddPersonMenu(true);
+    }
+
+    function addGuestPerson() {
         const name = window.prompt("Add person name:", "Guest")?.trim();
         if (!name) return;
         const updated: SessionLocal = { ...session, people: [...(people || []), { name }] };
         persistSession(updated);
+        setShowAddPersonMenu(false);
+    }
+
+    function addSimulatedPerson(accountId: string) {
+        const account = simulatedAccounts.find((entry) => entry.integrationUserId === accountId);
+        if (!account) return;
+
+        const updatedPerson: Profile = {
+            ...account,
+            librarySongs: account.librarySongs.map((song) => ({
+                ...song,
+                tracks: song.tracks.map((track) => ({
+                    source: track.source,
+                    type: track.type,
+                    data: { ...track.data },
+                })),
+            })),
+        };
+
+        const currentPeople = people || [];
+        const nextPeople = currentPeople.some((person) => person.integrationUserId === updatedPerson.integrationUserId)
+            ? currentPeople
+            : [...currentPeople, updatedPerson];
+
+        persistSession({ ...session, people: nextPeople });
+        setShowAddPersonMenu(false);
     }
 
     function exportSession() {
@@ -131,6 +128,7 @@ export default function SessionInfo({
 
 
     return (
+        <>
         <div className="card bg-base-200 p-6">
             <div>
                 <div className="flex-1">
@@ -172,15 +170,15 @@ export default function SessionInfo({
                             <div className="avatar-group -space-x-3">
 
                                 {people.slice(0, 3).map((p, i) => (
-                                    <>
+                                    <React.Fragment key={p.integrationUserId || p.name || i}>
                                         {p.imageUrl ? (
-                                            <div key={i} className="avatar">
+                                            <div className="avatar">
                                                 <div className="w-12">
                                                     <Image src={p.imageUrl} alt={p.name || 'User'} width={40} height={40} className="rounded-full object-cover" />
                                                 </div>
                                             </div>
                                         ) : (
-                                            <div key={i} className="avatar avatar-placeholder">
+                                            <div className="avatar avatar-placeholder">
                                                 <div className="bg-primary text-white w-12 ">
                                                     <span>{p.name?.charAt(0).toUpperCase() || 'G'}</span>
                                                 </div>
@@ -189,7 +187,7 @@ export default function SessionInfo({
                                         )}
 
 
-                                    </>
+                                    </React.Fragment>
 
 
 
@@ -210,10 +208,9 @@ export default function SessionInfo({
                         </button>
                     </div>
 
-                    {/* datetime and total playlist time */}
+                    {/* datetime */}
                     <div className="mt-3">
                         <p className="text-sm text-secondary">{formattedCreated}</p>
-                        <p className="text-sm text-muted mt-1">Total: {totalTime}</p>
                     </div>
 
                     <div className="flex gap-2 mt-4">
@@ -233,5 +230,51 @@ export default function SessionInfo({
                 </div>
             </div>
         </div>
+
+        {showAddPersonMenu && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setShowAddPersonMenu(false)}>
+                <div className="card w-full max-w-2xl bg-base-100" onClick={(e) => e.stopPropagation()}>
+                    <div className="card-body">
+                        <div className="flex items-start justify-between gap-3">
+                            <div>
+                                <h3 className="card-title">Add person</h3>
+                                <p className="text-sm text-muted">Pick a simulated account or add a guest.</p>
+                            </div>
+                            <button className="btn btn-ghost btn-sm" onClick={() => setShowAddPersonMenu(false)}>
+                                Close
+                            </button>
+                        </div>
+
+                        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+                            <button className="btn btn-outline justify-between h-auto py-3 px-4" onClick={addGuestPerson}>
+                                <div className="text-left">
+                                    <div className="font-semibold">Add guest</div>
+                                    <div className="text-xs text-muted">Create a custom person</div>
+                                </div>
+                                <span className="btn btn-xs btn-secondary">Add</span>
+                            </button>
+
+                            {simulatedAccounts.map((account) => (
+                                <button
+                                    key={account.integrationUserId}
+                                    className="btn btn-outline justify-between h-auto py-3 px-4"
+                                    onClick={() => addSimulatedPerson(account.integrationUserId || '')}
+                                    title={`Add ${account.name || account.integrationUserId}`}
+                                >
+                                    <div className="text-left min-w-0">
+                                        <div className="font-semibold truncate">{account.name || account.integrationUserId}</div>
+                                        <div className="text-xs text-muted truncate">
+                                            {account.connectedService || 'Unknown'} · {account.librarySongs.length} songs
+                                        </div>
+                                    </div>
+                                    <span className="btn btn-xs btn-secondary">Add</span>
+                                </button>
+                            ))}
+                        </div>
+                    </div>
+                </div>
+            </div>
+        )}
+        </>
     );
 }

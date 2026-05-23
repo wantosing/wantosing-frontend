@@ -37,24 +37,29 @@ export default function SessionNavClient() {
     }
 
     return (
-        <div className="dropdown dropdown-end">
-            <button tabIndex={0} className="btn btn-ghost">
-                <ProfileAvatar size={36} />
-            </button>
+        <div className="flex items-center gap-2">
+            <div className="dropdown dropdown-end">
+                <button tabIndex={0} className="btn btn-ghost" aria-label="Open profile menu" title="Open profile menu">
+                    <ProfileAvatar size={36} />
+                </button>
 
-            <ul tabIndex={0} className="mt-3 p-2 shadow menu menu-compact dropdown-content bg-base-100 rounded-box w-52">
-                <div className='p-4'>
-                    <div className="font-semibold">{profile?.name ?? 'Guest'}</div>
+                <ul tabIndex={0} className="mt-3 p-2 shadow menu menu-compact dropdown-content bg-base-100 rounded-box w-52">
+                    <div className='p-4'>
+                        <div className="font-semibold">{profile?.name ?? 'Guest'}</div>
 
-                </div>
-                <hr className='mb-2' />
-                <li>
-                    <Link href="/settings">Settings</Link>
-                </li>
-                <li>
-                    <button onClick={() => { handleLogout() }}>Logout</button>
-                </li>
-            </ul>
+                    </div>
+                    <hr className='mb-2' />
+                    <li>
+                        <Link href="/profile">Library</Link>
+                    </li>
+                    <li>
+                        <Link href="/settings">Settings</Link>
+                    </li>
+                    <li>
+                        <button onClick={() => { handleLogout() }}>Logout</button>
+                    </li>
+                </ul>
+            </div>
         </div>
     );
 }

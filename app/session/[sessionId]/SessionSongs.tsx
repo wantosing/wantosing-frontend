@@ -4,14 +4,85 @@ import Image from "next/image";
 import type { Song, Session, TrackEntry } from "../types";
 import SAMPLE_SONGS from "../sampleSongs";
 import { useState } from "react";
+import type { Profile } from '../../profile/types';
+import SessionSongInfoModal from './SessionSongInfoModal';
 
 type Props = {
     songs: Song[];
     session: Session;
     onUpdate: (updated: Session) => void;
+    totalTime: string;
 };
 
-export default function SessionSongs({ songs, session, onUpdate }: Props) {
+function normalizeSongKey(value?: string | null) {
+    return (value || "").trim().toLowerCase();
+}
+
+function getSongMatchKeys(song: Song) {
+    const keys = new Set<string>();
+    const primary = song.tracks?.[0]?.data;
+
+    if (song.id) keys.add(`songId:${normalizeSongKey(song.id)}`);
+    if (song.isrc) keys.add(`isrc:${normalizeSongKey(song.isrc)}`);
+    if (primary?.isrc) keys.add(`isrc:${normalizeSongKey(primary.isrc)}`);
+    if (primary?.externalId) keys.add(`track:${normalizeSongKey(primary.externalId)}`);
+
+    for (const track of song.tracks || []) {
+        if (track.data?.externalId) keys.add(`track:${normalizeSongKey(track.data.externalId)}`);
+        if (track.data?.isrc) keys.add(`isrc:${normalizeSongKey(track.data.isrc)}`);
+    }
+
+    const title = song.defaultName || primary?.name;
+    const artist = song.defaultArtistName || primary?.artistNames?.[0];
+    if (title && artist) {
+        keys.add(`titleartist:${normalizeSongKey(title)}|${normalizeSongKey(artist)}`);
+    }
+
+    return Array.from(keys);
+}
+
+type MatchEntry = {
+    person: Profile;
+    song: Song;
+};
+
+function getSongMatchStats(song: Song, sessionPeople: Profile[]) {
+    const songKeys = getSongMatchKeys(song);
+    let matchCount = 0;
+    const matchingPeople: Profile[] = [];
+    const matchingEntries: MatchEntry[] = [];
+
+    for (const person of sessionPeople) {
+        const librarySongs = person.librarySongs || [];
+        let personMatched = false;
+
+        for (const librarySong of librarySongs) {
+            const libraryKeys = getSongMatchKeys(librarySong);
+            const normalizedLibrary = new Set(libraryKeys.map(normalizeSongKey));
+            if (songKeys.some((key) => normalizedLibrary.has(normalizeSongKey(key)))) {
+                matchingEntries.push({ person, song: librarySong });
+                personMatched = true;
+            }
+        }
+
+        if (personMatched) {
+            matchCount += 1;
+            matchingPeople.push(person);
+        }
+    }
+
+    const totalPeople = sessionPeople.length;
+    const matchPercentage = totalPeople > 0 ? Math.round((matchCount / totalPeople) * 100) : 0;
+
+    const uniqueMatchingEntries = matchingEntries.filter((entry, index, arr) => {
+        const identity = `${entry.person.integrationUserId || entry.person.name || 'person'}:${entry.song.id}`;
+        return arr.findIndex((candidate) => `${candidate.person.integrationUserId || candidate.person.name || 'person'}:${candidate.song.id}` === identity) === index;
+    });
+
+    return { matchCount, matchPercentage, totalPeople, matchingPeople, matchingEntries: uniqueMatchingEntries };
+}
+
+export default function SessionSongs({ songs, session, onUpdate, totalTime }: Props) {
     const [selected, setSelected] = useState<Song | null>(null);
     const [addOpen, setAddOpen] = useState(false);
     // duration in the form is in seconds (we store durations internally as milliseconds)
@@ -164,6 +235,7 @@ export default function SessionSongs({ songs, session, onUpdate }: Props) {
     const selectedTitle = selected?.defaultName || selectedPrimary?.name || 'Untitled';
     const selectedArtist = selected?.defaultArtistName || selectedPrimary?.artistNames?.[0] || 'Unknown';
     const selectedTracks = selected?.tracks || [];
+    const selectedMatchStats = selected ? getSongMatchStats(selected, session.people ?? []) : null;
 
     // SAMPLE_SONGS now imported from ../sampleSongs
 
@@ -191,7 +263,9 @@ export default function SessionSongs({ songs, session, onUpdate }: Props) {
                 <div className="flex items-center justify-between mb-4">
                     <div>
                         <h3 className="text-xl font-semibold mb-1">Playlist</h3>
-                        <p className="text-sm text-muted">{songs.length} {songs.length === 1 ? 'song' : 'songs'}</p>
+                        <p className="text-sm text-muted">
+                            {songs.length} {songs.length === 1 ? 'song' : 'songs'} · Total: {totalTime}
+                        </p>
                     </div>
                     <div>
                         <button className="btn btn-sm btn-outline" onClick={openAdd}>
@@ -232,6 +306,7 @@ export default function SessionSongs({ songs, session, onUpdate }: Props) {
                             // derive duration in ms: prefer song.defaultDuration -> track data -> 0
                             const durationMs = song.defaultDuration ?? primary?.duration ?? 0;
                             const durationSec = Math.floor(durationMs / 1000);
+                            const { matchPercentage } = getSongMatchStats(song, session.people ?? []);
                             return (
                                 <li key={i} className="flex items-center gap-3 p-1 bg-base-100 rounded cursor-pointer" onClick={() => setSelected(song)}>
                                     <div className="w-14 h-14 relative rounded overflow-hidden flex-shrink-0">
@@ -242,7 +317,12 @@ export default function SessionSongs({ songs, session, onUpdate }: Props) {
                                         <div className="font-semibold">{title}</div>
                                         <div className="text-sm text-muted">{artist}</div>
                                     </div>
-                                    <div className="text-sm text-muted">{Math.floor(durationSec / 60)}:{String(durationSec % 60).padStart(2, "0")}</div>
+                                    <div className="ml-auto flex items-center gap-2 text-sm text-muted">
+                                        <span>{Math.floor(durationSec / 60)}:{String(durationSec % 60).padStart(2, "0")}</span>
+                                        <span className="badge badge-outline badge-sm">
+                                            {matchPercentage}%
+                                        </span>
+                                    </div>
                                 </li>
                             );
                         })}
@@ -306,75 +386,20 @@ export default function SessionSongs({ songs, session, onUpdate }: Props) {
                 </div>
             )}
 
-            {selected && (
-                <div className="fixed inset-0 bg-black/40 flex items-center justify-center z-50" onClick={() => setSelected(null)}>
-                    <div className="card w-96 bg-base-100 relative" onClick={(e) => e.stopPropagation()}>
-                        <button
-                            className="absolute top-2 right-2 btn btn-ghost btn-sm"
-                            onClick={() => setSelected(null)}
-                            aria-label="Close song details"
-                            title="Close"
-                        >
-                            {/* X icon */}
-                            <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">
-                                <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd" />
-                            </svg>
-                        </button>
-                        <div className="card-body flex flex-col items-center">
-                            <div className="w-36 h-36 relative rounded overflow-hidden">
-                                <Image src={selectedThumb} alt="thumb" fill style={{ objectFit: 'cover' }} />
-                            </div>
-                            <h3 className="text-lg font-semibold mt-4 text-center">{selectedTitle}</h3>
-                            <div className="text-sm text-muted mt-1 text-center">{selectedArtist}</div>
-
-                            <div className="flex gap-3 mt-4">
-                                {selectedTracks.map((t) => {
-                                    const url = t.data?.url;
-                                    if (!url) return null;
-                                    if (t.source === 'spotify') {
-                                        return (
-                                            <a key={url} href={url} target="_blank" rel="noreferrer" className="btn btn-ghost btn-square" aria-label="Open in Spotify" title="Open in Spotify">
-                                                {/* Spotify */}
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 168 168" className="h-5 w-5" aria-hidden="true">
-                                                    <path fill="#1ED760" d="M84 0a84 84 0 1 0 0 168A84 84 0 0 0 84 0z" />
-                                                    <path fill="#fff" d="M123.9 118.6c-1.9 2.8-5.6 3.6-8.3 1.7-22.6-15-51-18.4-84.3-10-3.2.8-6.6-1.1-7.4-4.3-.8-3.2 1.1-6.6 4.3-7.4 36.6-9 67.6-5.1 93.4 11.5 2.8 1.8 3.6 5.6 1.7 8.5zM128.5 88.6c-2.3 3.4-7 4.4-10.4 2.1-26-17-65.8-21.9-96.5-12-3.9 1.2-8.1-.9-9.3-4.8-1.2-3.9.9-8.1 4.8-9.3 34.8-11 78.2-5.7 109.4 13 3.4 2.2 4.4 7 2 10.9zM129.4 58.9c-31.8-17.8-81.1-19.4-108.6-10.6-4.6 1.6-9.5-.8-11.1-5.4-1.6-4.6.8-9.5 5.4-11.1 32.8-11.3 87.3-9.3 124.1 11 4 2.3 5.5 7.5 3.2 11.5-2.3 4-7.5 5.5-11.5 3.6z" />
-                                                </svg>
-                                            </a>
-                                        );
-                                    }
-                                    if (t.source === 'youtube' || t.source === 'ytmusic') {
-                                        return (
-                                            <a key={url} href={url} target="_blank" rel="noreferrer" className="btn btn-ghost btn-square" aria-label="Open in YouTube Music" title="Open in YouTube Music">
-                                                {/* YouTube Music */}
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" className="h-5 w-5" aria-hidden="true">
-                                                    <path fill="#FF0000" d="M43.6 11.2c-.4-1.6-1.6-2.8-3.2-3.2C36.4 7 24 7 24 7s-12.4 0-16.4.9c-1.6.4-2.8 1.6-3.2 3.2C3 15.3 3 24 3 24s0 8.7 1.4 12.8c.4 1.6 1.6 2.8 3.2 3.2C11.6 41 24 41 24 41s12.4 0 16.4-.9c1.6-.4 2.8-1.6 3.2-3.2C45 32.7 45 24 45 24s0-8.7-1.4-12.8z" />
-                                                    <path fill="#fff" d="M20 17l12 7-12 7z" />
-                                                </svg>
-                                            </a>
-                                        );
-                                    }
-                                    if (t.source === 'appleMusic' || t.source === 'apple') {
-                                        return (
-                                            <a key={url} href={url} target="_blank" rel="noreferrer" className="btn btn-ghost btn-square" aria-label="Open in Apple Music" title="Open in Apple Music">
-                                                {/* Apple Music */}
-                                                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" className="h-5 w-5" aria-hidden="true">
-                                                    <path fill="#000" d="M16.365 1.43c.06.11.12.22.18.33.2.39.36.82.45 1.28.14.7.08 1.47-.16 2.22-.28.86-.81 1.65-1.5 2.02-.24.13-.5.22-.77.27-.28.05-.56.07-.84.07-.26 0-.53-.02-.8-.07-.27-.06-.52-.15-.76-.27C11.36 6.4 10.9 5.61 10.62 4.75c-.25-.75-.32-1.52-.17-2.22.09-.46.25-.89.45-1.28.06-.11.12-.22.18-.33C11.39.2 11.69 0 12 0c.3 0 .6.2.77.43z" />
-                                                    <path fill="#000" d="M19.6 12.1c-.17-.42-.3-.86-.3-1.32 0-2.3 1.3-4.3 3.2-5.4-.9-1.1-2.2-1.8-3.6-1.9-1.4-.1-2.9.4-4 1.4-.9.9-1.7 2.3-1.7 3.8 0 .4.03.8.12 1.2-3.1.4-5.8 1.9-7.6 4.2-1.9 2.4-2.9 5.6-2.5 8.9.2 1.8.8 3.6 1.6 5.1 1 .2 2.1.3 3.3.1 1.7-.3 3.5-.9 5-1.8 2.6-1.5 4.5-3.6 6-6.1 1.1-1.8 1.9-3.9 2.2-6.1-.4-.1-.9-.2-1.4-.2-.2 0-.4 0-.5.01z" />
-                                                </svg>
-                                            </a>
-                                        );
-                                    }
-                                    // fallback icon for unknown sources
-                                    return (
-                                        <a key={url} href={url} target="_blank" rel="noreferrer" className="btn btn-ghost btn-square">
-                                            🔗
-                                        </a>
-                                    );
-                                })}
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            {selected && selectedMatchStats && (
+                <SessionSongInfoModal
+                    song={selected}
+                    session={session}
+                    selectedThumb={selectedThumb}
+                    selectedTitle={selectedTitle}
+                    selectedArtist={selectedArtist}
+                    selectedTracks={selectedTracks}
+                    matchCount={selectedMatchStats.matchCount}
+                    matchPercentage={selectedMatchStats.matchPercentage}
+                    totalPeople={selectedMatchStats.totalPeople}
+                    matchingEntries={selectedMatchStats.matchingEntries}
+                    onClose={() => setSelected(null)}
+                />
             )}
         </>
     );

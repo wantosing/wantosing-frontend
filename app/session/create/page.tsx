@@ -16,7 +16,7 @@ export default function NewSessionPage() {
     async function createAndRedirect() {
         try {
             const id = makeId();
-            const newSession = { id, name: `Session ${id}`, createdAt: new Date().toISOString() };
+            const newSession = { id, name: `Session ${id}`, createdAt: new Date().toISOString(), songMatching: { participants: [] } };
             const raw = localStorage.getItem(STORAGE_KEY) || "[]";
             const arr = JSON.parse(raw);
             arr.unshift(newSession);

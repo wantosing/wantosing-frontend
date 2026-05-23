@@ -1,3 +1,5 @@
+import type { Song } from '../session/types';
+
 export type ConnectedService = 'spotify' | 'appleMusic' | 'youtube' | string;
 
 export type Profile = {
@@ -7,6 +9,8 @@ export type Profile = {
     imageUrl?: string | null;
     country?: string | null;
     email?: string | null;
+    librarySongs?: Song[];
+    libraryLastSyncedAt?: string | null;
 };
 
 const STORAGE_KEY = 'wantosing:profile';

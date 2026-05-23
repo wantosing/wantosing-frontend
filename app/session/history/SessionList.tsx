@@ -46,7 +46,7 @@ export default function SessionList() {
 
     function addSample() {
         const id = Math.random().toString(36).slice(2, 9);
-        const newFull: FullSession = { id, name: `Session ${id}`, createdAt: new Date().toISOString(), people: [], songs: [] };
+        const newFull: FullSession = { id, name: `Session ${id}`, createdAt: new Date().toISOString(), people: [], songs: [], songMatching: { participants: [] } };
         try {
             const raw = localStorage.getItem(STORAGE_KEY) || "[]";
             const parsed = JSON.parse(raw) as unknown;
@@ -126,6 +126,7 @@ export default function SessionList() {
                 // validate people and songs if present
                 let people: Profile[] | undefined;
                 let songs: Song[] | undefined;
+                let songMatching: FullSession['songMatching'] | undefined;
                 if ('people' in obj) {
                     if (!isPersonArray(obj.people)) {
                         alert('Invalid session file: `people` must be an array of { name: string }');
@@ -140,6 +141,12 @@ export default function SessionList() {
                     }
                     songs = obj.songs as Song[];
                 }
+                if ('songMatching' in obj) {
+                    const maybe = obj.songMatching as unknown;
+                    if (maybe && typeof maybe === 'object' && Array.isArray((maybe as Record<string, unknown>).participants)) {
+                        songMatching = maybe as FullSession['songMatching'];
+                    }
+                }
 
                 // Always create a new id for the imported session to avoid collisions
                 const newId = Math.random().toString(36).slice(2, 9);
@@ -149,6 +156,7 @@ export default function SessionList() {
                     createdAt: obj.createdAt ? String(obj.createdAt) : new Date().toISOString(),
                     people,
                     songs,
+                    songMatching,
                 };
 
                 // Load existing stored sessions (full objects)

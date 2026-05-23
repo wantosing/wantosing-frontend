@@ -5,6 +5,7 @@ import Image from 'next/image';
 import Link from 'next/link';
 import type { Profile } from '../profile/types';
 import { getProfile, setProfile, clearProfile } from '../profile/types';
+import { sampleSpotify, sampleYoutube } from '../session/simulatedAccounts';
 
 function Avatar({ name, imageUrl }: { name?: string; imageUrl?: string | null }) {
     const initial = name && name.length > 0 ? name.charAt(0).toUpperCase() : "U";
@@ -86,7 +87,15 @@ export default function SettingsPage() {
         }
 
         // fallback sample profile
-        const fallback: Profile = { integrationUserId: "21ye6p6wcuqhmx5334ipt34ra", name: "NaphatS", imageUrl: "https://i.scdn.co/image/ab6775700000ee856f7342124488e7c6e7acf408", country: null, connectedService: "spotify" };
+        const fallback: Profile = {
+            integrationUserId: "21ye6p6wcuqhmx5334ipt34ra",
+            name: "NaphatS",
+            imageUrl: "https://i.scdn.co/image/ab6775700000ee856f7342124488e7c6e7acf408",
+            country: null,
+            connectedService: "spotify",
+            librarySongs: sampleSpotify.librarySongs.slice(0, 3),
+            libraryLastSyncedAt: sampleSpotify.libraryLastSyncedAt,
+        };
         setProfileState(fallback);
 
         // listen for external profile changes
@@ -121,8 +130,16 @@ export default function SettingsPage() {
     }
 
     // Developer quick-switch sample accounts
-    const spotifyDevAccount: Profile = { integrationUserId: "12345", name: "NaphatS", imageUrl: "https://i.scdn.co/image/ab6775700000ee856f7342124488e7c6e7acf408", country: null, connectedService: 'spotify' };
-    const youtubeDevAccount: Profile = { integrationUserId: "67890", name: "Napat Saokomut (plux_gy)", email: "a@gmail.com", imageUrl: "https://lh3.googleusercontent.com/a/ACg8ocJkiZ4Xz8BOP1-IPDh2BUUIjGy05L_SKvaoqTmoF8jS7VBF-Qur=s96-c", country: null, connectedService: 'youtube' };
+    const spotifyDevAccount: Profile = {
+        ...sampleSpotify,
+        integrationUserId: '12345',
+        librarySongs: sampleSpotify.librarySongs.slice(0, 4),
+    };
+    const youtubeDevAccount: Profile = {
+        ...sampleYoutube,
+        integrationUserId: '67890',
+        librarySongs: sampleYoutube.librarySongs.slice(0, 4),
+    };
 
     function applyDevAccount(p: Profile) {
         try {

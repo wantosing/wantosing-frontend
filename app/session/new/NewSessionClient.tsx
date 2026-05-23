@@ -5,6 +5,45 @@ import { QRCodeCanvas } from 'qrcode.react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import ParticipantsList from './ParticipantsList';
 import { Profile } from '@/app/profile/types';
+import type { Song, SongMatchingSession } from '../types';
+import { simulatedAccounts } from '../simulatedAccounts';
+
+function cloneSong(song: Song): Song {
+    return {
+        ...song,
+        tracks: song.tracks.map((track) => ({
+            source: track.source,
+            type: track.type,
+            data: { ...track.data },
+        })),
+    };
+}
+
+function getLibrarySongs(profile: Profile) {
+    if (profile.librarySongs?.length) return profile.librarySongs.map(cloneSong);
+    const matchedAccount = simulatedAccounts.find((account) => account.integrationUserId === profile.integrationUserId);
+    return matchedAccount?.librarySongs.map(cloneSong) || [];
+}
+
+function getSongIdentity(song: Song) {
+    const primary = song.tracks?.[0]?.data;
+    return [song.id, song.isrc || primary?.isrc || '', song.defaultName || primary?.name || '', song.defaultArtistName || primary?.artistNames?.[0] || '']
+        .join('|')
+        .toLowerCase();
+}
+
+function buildMatchingSongs(people: Profile[]) {
+    const seen = new Map<string, Song>();
+
+    for (const person of people) {
+        for (const song of getLibrarySongs(person)) {
+            const key = getSongIdentity(song);
+            if (!seen.has(key)) seen.set(key, song);
+        }
+    }
+
+    return Array.from(seen.values());
+}
 
 function makeRandomCode() {
     return String(Math.floor(100000 + Math.random() * 900000));
@@ -30,21 +69,32 @@ export default function NewSessionClient() {
         }
 
         try {
-            const participantsKey = `wantosing:participants:${room}`;
+            const participantsKey = `wantosing:song-matching:${room}`;
             const raw = localStorage.getItem(participantsKey) || '[]';
-            const participants = JSON.parse(raw) as Array<Profile>;
+            const parsed = JSON.parse(raw) as unknown;
+            const matchingSession: SongMatchingSession = Array.isArray(parsed)
+                ? { participants: (parsed as Profile[]).map((profile) => ({ profile, librarySongKeys: [] })) }
+                : (parsed as SongMatchingSession);
 
-            const people = (participants || []).map(p => ({
-                name: p?.name,
-                integrationUserId: p?.integrationUserId,
-                connectedService: p?.connectedService,
-                imageUrl: p?.imageUrl || null,
-                country: p?.country || null,
-                email: p?.email || null,
-            }));
+            const participants = matchingSession.participants || [];
+            const people = participants.map((p) => {
+                const profile = p?.profile;
+                const librarySongs = getLibrarySongs(profile);
+                return {
+                    name: profile?.name,
+                    integrationUserId: profile?.integrationUserId,
+                    connectedService: profile?.connectedService,
+                    imageUrl: profile?.imageUrl || null,
+                    country: profile?.country || null,
+                    email: profile?.email || null,
+                    librarySongs,
+                    libraryLastSyncedAt: profile?.libraryLastSyncedAt || null,
+                };
+            });
+            const songs = buildMatchingSongs(people as Profile[]);
 
             const id = makeId();
-            const newSession = { id, name: `Session ${id}`, createdAt: new Date().toISOString(), people };
+            const newSession = { id, name: `Session ${id}`, createdAt: new Date().toISOString(), people, songs, songMatching: matchingSession };
 
             const SESSIONS_KEY = 'wantosing:sessions';
             const rawSessions = localStorage.getItem(SESSIONS_KEY) || '[]';

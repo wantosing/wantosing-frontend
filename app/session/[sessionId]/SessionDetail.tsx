@@ -154,7 +154,6 @@ export default function SessionDetail({ id }: { id: string }) {
                 people={people}
                 setShowPeople={setShowPeople}
                 formattedCreated={formatGMT7(session.createdAt)}
-                totalTime={formatDuration(totalSeconds)}
                 onBack={() => window.history.back()}
                 onDeleteRequest={() => setShowDeleteConfirm(true)}
             />
@@ -221,7 +220,7 @@ export default function SessionDetail({ id }: { id: string }) {
                 </div>
             )}
 
-            <SessionSongs songs={songs} session={session} onUpdate={onUpdate} />
+            <SessionSongs songs={songs} session={session} onUpdate={onUpdate} totalTime={formatDuration(totalSeconds)} />
         </div>
     );
 }
