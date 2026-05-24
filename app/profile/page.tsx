@@ -1,10 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
-import type { Profile } from './types';
-import { getProfile } from './types';
+import { getMe, getMyLibrary, type MyLibrarySong, type User } from '@/lib/api-client';
+import { SavedSongsList } from './SavedSongsList';
 
 function formatDate(value?: string | null) {
     if (!value) return 'Not synced yet';
@@ -18,38 +17,79 @@ function formatDate(value?: string | null) {
     }
 }
 
+type ProfileState = {
+    user: User;
+    librarySongs: MyLibrarySong[];
+    libraryLastSyncedAt: string | null;
+    provider: string;
+    page: number;
+    pageSize: number;
+    totalItems: number;
+    totalPages: number;
+};
+
 export default function ProfilePage() {
-    const [profile, setProfile] = useState<Profile | null>(null);
+    const [profile, setProfile] = useState<ProfileState | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [page, setPage] = useState(1);
 
     useEffect(() => {
-        setProfile(getProfile());
-        const onChange = (e: Event) => {
-            try {
-                const detail = (e as CustomEvent).detail as Profile | null;
-                if (detail === null) return setProfile(null);
-                if (detail) return setProfile(detail);
-            } catch {
-                setProfile(getProfile());
-            }
-        };
-        window.addEventListener('wantosing:profile:changed', onChange as EventListener);
-        return () => window.removeEventListener('wantosing:profile:changed', onChange as EventListener);
-    }, []);
+        let isMounted = true;
 
-    const librarySongs = useMemo(() => profile?.librarySongs || [], [profile]);
+        async function loadProfile() {
+            setIsLoading(true);
+            setError(null);
+
+            try {
+                const [user, library] = await Promise.all([getMe(), getMyLibrary(page)]);
+                if (!isMounted) return;
+                setProfile({
+                    user,
+                    librarySongs: library.songs,
+                    libraryLastSyncedAt: new Date().toISOString(),
+                    provider: library.provider,
+                    page: library.page,
+                    pageSize: library.pageSize,
+                    totalItems: library.totalItems,
+                    totalPages: library.totalPages,
+                });
+            } catch (err) {
+                if (!isMounted) return;
+                console.error(err);
+                setProfile(null);
+                setError('Sign in to view your streaming library.');
+            } finally {
+                if (isMounted) setIsLoading(false);
+            }
+        }
+
+        void loadProfile();
+
+        return () => {
+            isMounted = false;
+        };
+    }, [page]);
+
+    const initials = profile?.user.displayName?.charAt(0).toUpperCase() || profile?.user.email?.charAt(0).toUpperCase() || 'U';
+    const librarySongs = profile?.librarySongs || [];
+    const currentPage = profile?.page ?? page;
+    const totalPages = profile?.totalPages ?? 1;
+    const canGoPrevious = currentPage > 1;
+    const canGoNext = currentPage < totalPages;
 
     return (
         <main className="min-h-screen bg-base-100 p-6 md:p-10">
             <div className="max-w-5xl mx-auto space-y-6">
                 <div className="flex items-start justify-between gap-4">
                     <div>
-                        <p className="text-sm text-muted mb-2">Profile library</p>
-                        <h1 className="text-3xl font-bold">{profile?.name || 'Guest'}</h1>
+                        {/* <p className="text-sm text-muted mb-2">Streaming profile</p> */}
+                        <h1 className="text-3xl font-bold">{'Your account'}</h1>
                         <p className="text-sm text-muted mt-2">Latest sync: {formatDate(profile?.libraryLastSyncedAt)}</p>
                     </div>
 
                     <button className="btn btn-primary" disabled title="Sync is coming soon">
-                        Sync songs
+                        Sync {profile?.provider || 'service'}
                     </button>
                 </div>
 
@@ -57,60 +97,48 @@ export default function ProfilePage() {
                     <div className="card-body">
                         <div className="flex items-center gap-4">
                             <div className="w-16 h-16 rounded-full overflow-hidden bg-base-300 relative">
-                                {profile?.imageUrl ? (
-                                    <Image src={profile.imageUrl} alt={profile.name || 'Profile'} fill sizes="64px" style={{ objectFit: 'cover' }} />
+                                {profile?.user.avatarUrl ? (
+                                    <Image src={profile.user.avatarUrl} alt={profile.user.displayName || profile.user.email || 'Profile avatar'} fill sizes="64px" style={{ objectFit: 'cover' }} />
                                 ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-2xl font-bold">{profile?.name?.charAt(0).toUpperCase() || 'U'}</div>
+                                    <div className="w-full h-full flex items-center justify-center text-2xl font-bold">{initials}</div>
                                 )}
                             </div>
                             <div>
-                                <div className="font-semibold">{profile?.email || profile?.integrationUserId || 'No profile details available'}</div>
+                                <div className="font-semibold">{profile?.user.displayName || profile?.user.email || profile?.user.id}</div>
+                                <div className="text-sm text-muted">Provider: {profile?.provider || 'Unknown'}</div>
                                 <div className="text-sm text-muted">Songs in library: {librarySongs.length}</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div className="card bg-base-200">
-                    <div className="card-body">
-                        <div className="flex items-center justify-between gap-4 mb-2">
-                            <h2 className="text-xl font-semibold">Library songs</h2>
-                            <Link href="/session" className="btn btn-ghost btn-sm">
-                                Back to sessions
-                            </Link>
+                {isLoading ? (
+                    <div className="card bg-base-200">
+                        <div className="card-body">
+                            <div className="skeleton h-6 w-48" />
+                            <div className="skeleton h-12 w-full" />
+                            <div className="skeleton h-12 w-full" />
                         </div>
-
-                        {librarySongs.length === 0 ? (
-                            <div className="text-sm text-muted">No songs saved in this library yet.</div>
-                        ) : (
-                            <ul className="space-y-2">
-                                {librarySongs.map((song, index) => {
-                                    const primary = song.tracks?.[0]?.data;
-                                    const thumb = song.defaultThumbnail || primary?.imageUrl || '/file.svg';
-                                    const title = song.defaultName || primary?.name || 'Untitled';
-                                    const artist = song.defaultArtistName || primary?.artistNames?.[0] || 'Unknown';
-                                    const durationMs = song.defaultDuration ?? primary?.duration ?? 0;
-                                    const durationSec = Math.floor(durationMs / 1000);
-
-                                    return (
-                                        <li key={`${song.id}-${index}`} className="flex items-center gap-3 rounded bg-base-100 p-2">
-                                            <div className="w-12 h-12 relative rounded overflow-hidden flex-shrink-0">
-                                                <Image src={thumb} alt={title} fill style={{ objectFit: 'cover' }} />
-                                            </div>
-                                            <div className="flex-1 min-w-0">
-                                                <div className="font-semibold truncate">{title}</div>
-                                                <div className="text-sm text-muted truncate">{artist}</div>
-                                            </div>
-                                            <div className="text-sm text-muted whitespace-nowrap">
-                                                {Math.floor(durationSec / 60)}:{String(durationSec % 60).padStart(2, '0')}
-                                            </div>
-                                        </li>
-                                    );
-                                })}
-                            </ul>
-                        )}
                     </div>
-                </div>
+                ) : null}
+
+                {error ? (
+                    <div className="alert alert-warning">
+                        <span>{error}</span>
+                    </div>
+                ) : null}
+
+                <SavedSongsList
+                    songs={librarySongs}
+                    totalItems={profile?.totalItems ?? 0}
+                    page={currentPage}
+                    totalPages={totalPages}
+                    isLoading={isLoading}
+                    canGoPrevious={canGoPrevious}
+                    canGoNext={canGoNext}
+                    onPrevious={() => setPage((current) => Math.max(1, current - 1))}
+                    onNext={() => setPage((current) => current + 1)}
+                />
             </div>
         </main>
     );

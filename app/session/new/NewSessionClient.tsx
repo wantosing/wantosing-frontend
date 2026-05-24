@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import ParticipantsList from './ParticipantsList';
+import { devLogin, createSession } from '@/lib/api-client';
 import { Profile } from '@/app/profile/types';
 import type { Song, SongMatchingSession } from '../types';
 import { simulatedAccounts } from '../simulatedAccounts';
@@ -93,17 +94,31 @@ export default function NewSessionClient() {
             });
             const songs = buildMatchingSongs(people as Profile[]);
 
-            const id = makeId();
-            const newSession = { id, name: `Session ${id}`, createdAt: new Date().toISOString(), people, songs, songMatching: matchingSession };
+            // Try to create a server-backed session (requires auth via dev-login)
+            try {
+                // ensure a dev login exists (test account)
+                const storedCsrf = localStorage.getItem('ws_csrf') || null;
+                let csrf = storedCsrf;
+                if (!csrf) {
+                    const login = await devLogin('test@example.com', 'Test User');
+                    csrf = login.csrfToken;
+                    if (csrf) localStorage.setItem('ws_csrf', csrf);
+                }
 
-            const SESSIONS_KEY = 'wantosing:sessions';
-            const rawSessions = localStorage.getItem(SESSIONS_KEY) || '[]';
-            const arr = JSON.parse(rawSessions);
-            arr.unshift(newSession);
-            localStorage.setItem(SESSIONS_KEY, JSON.stringify(arr));
+                const created = await createSession(`Session ${makeId()}`, 'invite_only', csrf ?? undefined);
+                const id = created.id;
 
-            // Navigate to the newly created session
-            router.push(`/session/${id}`);
+                const SESSIONS_KEY = 'wantosing:sessions';
+                const rawSessions = localStorage.getItem(SESSIONS_KEY) || '[]';
+                const arr = JSON.parse(rawSessions);
+                arr.unshift({ id, name: created.name, createdAt: created.createdAt, people, songs, songMatching: matchingSession });
+                localStorage.setItem(SESSIONS_KEY, JSON.stringify(arr));
+
+                router.push(`/session/${id}`);
+                return;
+            } catch (err) {
+                console.warn('Server session creation failed, falling back to local-only session', err);
+            }
         } catch (e) {
             // if anything goes wrong, fallback to the create page which will create an empty session
             console.error('Failed to create session with participants', e);
