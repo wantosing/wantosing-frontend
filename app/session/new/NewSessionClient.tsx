@@ -101,7 +101,7 @@ export default function NewSessionClient() {
                 let csrf = storedCsrf;
                 if (!csrf) {
                     const login = await devLogin('test@example.com', 'Test User');
-                    csrf = login.csrfToken;
+                    csrf = login.csrfToken ?? null;
                     if (csrf) localStorage.setItem('ws_csrf', csrf);
                 }
 
