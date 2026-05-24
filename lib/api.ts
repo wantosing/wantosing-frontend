@@ -2,15 +2,27 @@ import { clearProfile } from "@/app/profile/types";
 
 // Determine API base URL. Priority:
 // 1. `NEXT_PUBLIC_API_BASE` environment variable (useful for local dev overrides)
-// 2. `window.location.origin` when running in the browser
-// 3. empty string as a last resort (relative requests)
-const DEFAULT_BASE = (typeof window !== 'undefined' && window.location && window.location.origin)
-  ? window.location.origin
-  : "";
+// 2. local browser origin when running on localhost during development
+// 3. the deployed backend origin in production
+
+const FALLBACK_BACKEND_BASE = "https://wantosing-backend.naphats.workers.dev";
+
+function getLocalBrowserBase() {
+  if (typeof window === "undefined" || !window.location) {
+    return null;
+  }
+
+  const hostname = window.location.hostname.toLowerCase();
+  if (hostname === "localhost" || hostname === "127.0.0.1" || hostname === "0.0.0.0") {
+    return window.location.origin;
+  }
+
+  return null;
+}
 
 const BASE = (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_API_BASE)
   ? process.env.NEXT_PUBLIC_API_BASE
-  : DEFAULT_BASE;
+  : getLocalBrowserBase() || FALLBACK_BACKEND_BASE;
   
 // --- Types ---
 export type User = {
