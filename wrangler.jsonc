@@ -33,7 +33,7 @@
 	 * Environment Variables
 	 * https://developers.cloudflare.com/workers/wrangler/configuration/#environment-variables
 	 */
-	"vars": { "NEXT_PUBLIC_API_BASE": "https://wantosing-frontend.naphats.workers.dev" }
+	"vars": { "NEXT_PUBLIC_API_BASE": "https://wantosing-backend.naphats.workers.dev" }
 	/**
 	 * Note: Use secrets to store sensitive data.
 	 * https://developers.cloudflare.com/workers/configuration/secrets/
