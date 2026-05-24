@@ -11,6 +11,7 @@ const DEFAULT_BASE = (typeof window !== 'undefined' && window.location && window
 const BASE = (typeof process !== 'undefined' && process.env && process.env.NEXT_PUBLIC_API_BASE)
   ? process.env.NEXT_PUBLIC_API_BASE
   : DEFAULT_BASE;
+  
 // --- Types ---
 export type User = {
   id: string;

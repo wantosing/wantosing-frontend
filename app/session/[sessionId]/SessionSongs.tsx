@@ -237,6 +237,10 @@ export default function SessionSongs({ songs, session, onUpdate, totalTime }: Pr
     const selectedTracks = selected?.tracks || [];
     const selectedMatchStats = selected ? getSongMatchStats(selected, session.people ?? []) : null;
 
+    // Prepare songs with match stats and sort by matchPercentage (high -> low)
+    const songsWithStats = songs.map((s) => ({ song: s, stats: getSongMatchStats(s, session.people ?? []) }));
+    const sortedSongsWithStats = songsWithStats.sort((a, b) => b.stats.matchPercentage - a.stats.matchPercentage);
+
     // SAMPLE_SONGS now imported from ../sampleSongs
 
     function quickAdd(index: number) {
@@ -298,7 +302,8 @@ export default function SessionSongs({ songs, session, onUpdate, totalTime }: Pr
                     <div className="text-sm text-muted">No songs added yet.</div>
                 ) : (
                     <ul className="space-y-2">
-                        {songs.map((song, i) => {
+                        {sortedSongsWithStats.map((entry, i) => {
+                            const song = entry.song;
                             const primary = song.tracks?.[0]?.data;
                             const thumb = song.defaultThumbnail || primary?.imageUrl || "/file.svg";
                             const title = song.defaultName || primary?.name || "Untitled";
@@ -306,9 +311,9 @@ export default function SessionSongs({ songs, session, onUpdate, totalTime }: Pr
                             // derive duration in ms: prefer song.defaultDuration -> track data -> 0
                             const durationMs = song.defaultDuration ?? primary?.duration ?? 0;
                             const durationSec = Math.floor(durationMs / 1000);
-                            const { matchPercentage } = getSongMatchStats(song, session.people ?? []);
+                            const { matchPercentage } = entry.stats;
                             return (
-                                <li key={i} className="flex items-center gap-3 p-1 bg-base-100 rounded cursor-pointer" onClick={() => setSelected(song)}>
+                                <li key={song.id || i} className="flex items-center gap-3 p-1 bg-base-100 rounded cursor-pointer" onClick={() => setSelected(song)}>
                                     <div className="w-14 h-14 relative rounded overflow-hidden flex-shrink-0">
                                         {/* force 1:1 thumbnail */}
                                         <Image src={thumb} alt="thumb" fill style={{ objectFit: "cover" }} />
